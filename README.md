@@ -52,7 +52,7 @@ Tarea2_2/
 
 **Características**:
 - Diálogo de selección de archivos
-- Filtros para tipos de archivo (txt, todos)
+- Filtros para tipos python
 - Visualización inmediata del contenido seleccionado
 - Interfaz independiente reutilizable
 
