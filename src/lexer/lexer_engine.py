@@ -9,8 +9,6 @@ class Category(Enum):
     KEYWORD = "KEYWORD"
     IDENT = "IDENT"
     LIT_INT = "LIT_INT"
-    LIT_FLOAT = "LIT_FLOAT"
-    LIT_STRING = "LIT_STRING"
     OPERATOR = "OPERATOR"
     PUNCT = "PUNCT"
     EOF = "EOF"
@@ -23,7 +21,7 @@ class Token:
     lexeme: str
     line: int
     col: int
-    value: int | float | str | None = None
+    value: int | None = None
 
     def __str__(self) -> str:
         base = f"{self.category.value}:{self.kind} '{self.lexeme}' ({self.line}:{self.col})"
@@ -33,45 +31,25 @@ class Token:
 
 class TokenRegistry:
     def __init__(self):
-        # Keywords básicas de Python
         self.keywords: Dict[str, str] = {
-            "and": "AND", "or": "OR", "not": "NOT",
-            "if": "IF", "elif": "ELIF", "else": "ELSE",
-            "while": "WHILE", "for": "FOR", "in": "IN",
-            "def": "DEF", "return": "RETURN", "pass": "PASS",
-            "class": "CLASS", "import": "IMPORT", "from": "FROM", "as": "AS",
-            "try": "TRY", "except": "EXCEPT", "finally": "FINALLY",
-            "with": "WITH", "lambda": "LAMBDA",
-            "True": "TRUE", "False": "FALSE", "None": "NONE",
-            "break": "BREAK", "continue": "CONTINUE",
-            "is": "IS", "del": "DEL", "global": "GLOBAL", "nonlocal": "NONLOCAL",
+            "if": "IF", "else": "ELSE", "while": "WHILE", "return": "RETURN",
+            "int": "INT_KW", "float": "FLOAT_KW", "true": "TRUE_KW", "false": "FALSE_KW",
+            "import": "IMPORT", "from": "FROM", "as": "AS",
         }
         
-        # Operadores de Python
         self.operators: Dict[str, str] = {
-            # Aritméticos
-            "+": "PLUS", "-": "MINUS", "*": "STAR", "/": "SLASH", 
-            "//": "DOUBLESLASH", "%": "PERCENT", "**": "DOUBLESTAR",
-            # Asignación
-            "=": "ASSIGN", "+=": "PLUSEQUAL", "-=": "MINUSEQUAL", 
-            "*=": "STAREQUAL", "/=": "SLASHEQUAL", "//=": "DOUBLESLASHEQUAL",
-            "%=": "PERCENTEQUAL", "**=": "DOUBLESTAREQUAL",
-            # Comparación
-            "==": "EQEQUAL", "!=": "NOTEQUAL", "<": "LESS", ">": "GREATER",
-            "<=": "LESSEQUAL", ">=": "GREATEREQUAL",
+            "==": "EQ", "+": "PLUS", "-": "MINUS", "*": "STAR", 
+            "/": "SLASH", "=": "ASSIGN",
         }
         
-        # Puntuación de Python
         self.punctuation: Dict[str, str] = {
-            "(": "LPAR", ")": "RPAR", "[": "LSQB", "]": "RSQB",
-            "{": "LBRACE", "}": "RBRACE", ",": "COMMA", ":": "COLON",
-            ";": "SEMI", ".": "DOT",
+            "(": "LPAREN", ")": "RPAREN", "{": "LBRACE", 
+            "}": "RBRACE", ";": "SEMI",
         }
 
     def _create_alternation(self, symbols: list[str]) -> str:
         if not symbols:
             return r"(?!x)x"
-        # Ordenar por longitud descendente para evitar problemas con operadores como ** vs *
         return "|".join(re.escape(s) for s in sorted(symbols, key=len, reverse=True))
 
     def build_regex_pattern(self) -> str:
@@ -80,17 +58,126 @@ class TokenRegistry:
         punct_alt = self._create_alternation(list(self.punctuation.keys()))
 
         return rf"""
-            (?P<WS>        [ \t]+ )         1                            |  # Espacios y tabs
-            (?P<NEWLINE>   \r?\n )                                      |  # Nueva línea
-            (?P<COMMENT>   \#[^\n]* )                                   |  # Comentarios Python
-            (?P<STRING>    (?:'''(?:[^'\\]|\\.|'(?!''))*''') |             # String triple comilla simple
-                          (?:\"\"\"(?:[^\"\\]|\\.|\"(?!\"\"))*\"\"\")   |  # String triple comilla doble
-                          (?:'(?:[^'\\]|\\.)*') |                          # String comilla simple
-                          (?:\"(?:[^\"\\]|\\.)*\") )                       # String comilla doble
-            (?P<FLOAT>     (?:[0-9]*\.[0-9]+)|(?:[0-9]+\.) )            |  # Float literals
-            (?P<INT>       [0-9]+ )                                     |  # Integer literals
-            (?P<KEYWORD>   \b(?:{kw_alt})\b )                           |  # Keywords
-            (?P<ID>        [A-Za-z_][A-Za-z0-9_]* )                     |  # Identifiers
-            (?P<OP>        (?:{op_alt}) )                               |  # Operators
-            (?P<PUNCT>     (?:{punct_alt}) )                               # Punctuation
+            (?P<WS>        [ \t\r\n]+ )                     |  
+            (?P<COMMENT>   //[^\n]* )                       |  
+            (?P<KEYWORD>   \b(?:{kw_alt})\b )               |  
+            (?P<ID>        [A-Za-z_][A-Za-z0-9_]* )         |  
+            (?P<INT>       [0-9]+ )                         |  
+            (?P<OP>        (?:{op_alt}) )                   |  
+            (?P<PUNCT>     (?:{punct_alt}) )                   
         """
+
+class TokenFactory:
+    def __init__(self, registry: TokenRegistry):
+        self.registry = registry
+        self._creators: Dict[str, Callable] = {
+            "KEYWORD": self._create_keyword,
+            "ID": self._create_identifier,
+            "INT": self._create_integer,
+            "OP": self._create_operator,
+            "PUNCT": self._create_punctuation,
+        }
+
+    def create_token(self, token_type: str, lexeme: str, line: int, col: int) -> Token:
+        creator = self._creators.get(token_type)
+        if creator:
+            return creator(lexeme, line, col)
+        return self._create_error(lexeme, line, col)
+
+    def _create_keyword(self, lexeme: str, line: int, col: int) -> Token:
+        kind = self.registry.keywords[lexeme]
+        return Token(Category.KEYWORD, kind, lexeme, line, col)
+
+    def _create_identifier(self, lexeme: str, line: int, col: int) -> Token:
+        return Token(Category.IDENT, "ID", lexeme, line, col)
+
+    def _create_integer(self, lexeme: str, line: int, col: int) -> Token:
+        return Token(Category.LIT_INT, "INT", lexeme, line, col, value=int(lexeme))
+
+    def _create_operator(self, lexeme: str, line: int, col: int) -> Token:
+        kind = self.registry.operators[lexeme]
+        return Token(Category.OPERATOR, kind, lexeme, line, col)
+
+    def _create_punctuation(self, lexeme: str, line: int, col: int) -> Token:
+        kind = self.registry.punctuation[lexeme]
+        return Token(Category.PUNCT, kind, lexeme, line, col)
+
+    def _create_error(self, lexeme: str, line: int, col: int) -> Token:
+        return Token(Category.ERROR, "UNKNOWN_CHAR", lexeme, line, col)
+
+class PositionTracker:
+    def __init__(self, line: int = 1, col: int = 1):
+        self.line = line
+        self.col = col
+
+    def advance(self, text: str) -> tuple[int, int]:
+        start_line, start_col = self.line, self.col
+        
+        for char in text:
+            if char == "\n":
+                self.line += 1
+                self.col = 1
+            else:
+                self.col += 1
+                
+        return start_line, start_col
+
+    def advance_single_char(self, char: str) -> tuple[int, int]:
+        start_line, start_col = self.line, self.col
+        
+        if char == "\n":
+            self.line += 1
+            self.col = 1
+        else:
+            self.col += 1
+            
+        return start_line, start_col
+
+class Lexer:
+    def __init__(self, text: str, registry: TokenRegistry | None = None):
+        self.text = text
+        self.pos = 0
+        self.position_tracker = PositionTracker()
+        
+        self.registry = registry or TokenRegistry()
+        self.token_factory = TokenFactory(self.registry)
+        self.pattern = self._compile_pattern()
+
+    def _compile_pattern(self) -> Pattern[str]:
+        pattern_str = self.registry.build_regex_pattern()
+        return re.compile(pattern_str, re.VERBOSE)
+
+    def recompile_pattern(self) -> None:
+        self.pattern = self._compile_pattern()
+
+    def tokens(self) -> Iterator[Token]:
+        while self.pos < len(self.text):
+            token = self._next_token()
+            if token:
+                yield token
+
+        yield Token(Category.EOF, "EOF", "", 
+                   self.position_tracker.line, self.position_tracker.col)
+
+    def _next_token(self) -> Token | None:
+        match = self.pattern.match(self.text, self.pos)
+        
+        if not match:
+            return self._handle_unknown_character()
+
+        token_type = match.lastgroup      
+        lexeme = match.group(token_type)
+        start_line, start_col = self.position_tracker.advance(lexeme)
+        self.pos = match.end()
+
+        if token_type in ("WS", "COMMENT"):
+            return None
+
+        return self.token_factory.create_token(token_type, lexeme, start_line, start_col)
+
+    def _handle_unknown_character(self) -> Token:
+        bad_char = self.text[self.pos]
+        start_line, start_col = self.position_tracker.advance_single_char(bad_char)
+        self.pos += 1
+        
+        return self.token_factory._create_error(bad_char, start_line, start_col)
