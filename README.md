@@ -9,7 +9,6 @@ Esta aplicación es un analizador léxico (lexer) con interfaz gráfica desarrol
 ### Estructura de Directorios
 
 ```
-Tarea2_2/
 ├── src/                      # Código fuente principal
 │   ├── main.py               # Punto de entrada de la aplicación
 │   ├── gui/                  # Módulos de interfaz gráfica
