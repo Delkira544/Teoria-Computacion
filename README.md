@@ -99,8 +99,8 @@ Esta aplicación es un analizador léxico (lexer) con interfaz gráfica desarrol
 
 **Función**: Utilidades para manejo de archivos
 
-- [`read_file_utf8`](Tarea2_2/src/utils/file_handler.py): Lee archivos con codificación UTF-8
-- [`save_file_utf8`](Tarea2_2/src/utils/file_handler.py): Guarda archivos con codificación UTF-8
+- [`read_file_utf8`](src/utils/file_handler.py): Lee archivos con codificación UTF-8
+- [`save_file_utf8`](src/utils/file_handler.py): Guarda archivos con codificación UTF-8
 - Manejo robusto de errores de E/O
 
 ## Flujo de Funcionamiento
@@ -115,14 +115,14 @@ python src/main.py
 ### 2. Proceso de Análisis
 
 1. **Selección de Archivo**: Click en "Select File"
-2. **Carga**: El archivo se lee usando [`read_file_utf8`](Tarea2_2/src/utils/file_handler.py)
+2. **Carga**: El archivo se lee usando [`read_file_utf8`](src/utils/file_handler.py)
 3. **Visualización**: Contenido mostrado en área de texto superior
-4. **Análisis**: El [`Lexer`](Tarea2_2/src/lexer/lexer_engine.py) procesa automáticamente
+4. **Análisis**: El [`Lexer`](src/lexer/lexer_engine.py) procesa automáticamente
 5. **Resultados**: Tokens mostrados con información detallada
 
 ### 3. Formato de Salida de Tokens
 
-Cada [`Token`](Tarea2_2/src/lexer/lexer_engine.py) incluye:
+Cada [`Token`](src/lexer/lexer_engine.py) incluye:
 
 ```
 KEYWORD:IMPORT 'import' (1:1)
@@ -188,7 +188,7 @@ LIT_STRING:LIT_STRING '"var1 = 42 + 3.14;"' (3:8) value=var1 = 42 + 3.14;
 
 ### Archivos de Ejemplo
 
-El proyecto incluye [`recurso.src`](Tarea2_2/recurso.src) con código Python de ejemplo:
+El proyecto incluye [`recurso.src`](recurso.src) con código Python de ejemplo:
 
 ```python
 import re
@@ -223,7 +223,7 @@ for match in get_token(texto):
 
 ### Agregar Nuevas Categorías
 
-Modifica [`Category`](Tarea2_2/src/lexer/lexer_engine.py) enum:
+Modifica [`Category`](src/lexer/lexer_engine.py) enum:
 
 ```python
 class Category(Enum):
@@ -234,7 +234,7 @@ class Category(Enum):
 
 ### Agregar Nuevos Tokens
 
-Actualiza [`TokenRegistry`](Tarea2_2/src/lexer/lexer_engine.py):
+Actualiza [`TokenRegistry`](src/lexer/lexer_engine.py):
 
 ```python
 self.keywords["new_keyword"] = "NEW_KEYWORD"
@@ -243,7 +243,7 @@ self.operators["<=>"] = "SPACESHIP"
 
 ### Personalizar Regex
 
-Modifica [`build_regex_pattern`](Tarea2_2/src/lexer/lexer_engine.py) en TokenRegistry.
+Modifica [`build_regex_pattern`](src/lexer/lexer_engine.py) en TokenRegistry.
 
 ## Manejo de Errores
 
