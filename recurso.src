@@ -1,0 +1,9 @@
+import re
+
+texto = "var1 = 42 + 3.14;"
+
+for match in get_token(texto):
+    tipo = match.lastgroup
+    valor = match.group()
+    if tipo != 'SKIP':
+        print(f'{tipo}: {valor}')
