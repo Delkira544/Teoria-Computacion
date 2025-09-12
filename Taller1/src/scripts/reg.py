@@ -2,39 +2,110 @@ import re
 
 def compilar_regex(patron: str, case_sensitive: bool):
     """Compila la expresión regular con el flag adecuado."""
-    flags = 0 if case_sensitive else re.IGNORECASE
-    return re.compile(patron, flags), flags
+    try:
+        flags = 0 if case_sensitive else re.IGNORECASE
+        return re.compile(patron, flags), flags
+    except re.error as e:
+        print(f"Error al compilar la expresión regular: {e}")
+        return None, None
 
 
 def probar_regex(patron: str, case_sensitive: bool, cadena: str):
     """Prueba si la cadena coincide con la expresión regular."""
     regex, _ = compilar_regex(patron, case_sensitive)
-    return bool(regex.fullmatch(cadena))
+    if regex:
+        return bool(regex.fullmatch(cadena))
+    return False
+
+
+def extraer_año(correo: str):
+    """Extrae el año de un correo con formato válido."""
+    match = re.search(r'[0-9]{4}@', correo)
+    if match:
+        return match.group(0)[:-1]  # Elimina el @ al final
+    return None
+
+
+def validar_año_rango(año: str):
+    """Valida que el año esté en el rango 2010-2025."""
+    try:
+        año_num = int(año)
+        return 2010 <= año_num <= 2025
+    except (ValueError, TypeError):
+        return False
 
 
 def analizar_motivo(correo: str, patron: str):
     """Devuelve el motivo de invalidez según reglas del taller."""
-    # Adaptar aquí si cambian reglas
+    # Verificar formato básico de nombre[separador]apellido
     if not re.match(r"^[a-zA-Z]+[._-][a-zA-Z]+", correo):
-        return "separador o caracteres no permitidos"
-    if not re.search(r"[0-9]{4}@", correo):
-        return "no termina en 4 dígitos"
-    if not re.search(r"@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", correo):
-        return "dominio inválido"
-    return "no cumple formato"
+        return "formato de nombre[separador]apellido incorrecto"
+    
+    # Verificar que tenga 4 dígitos antes del @
+    año_match = re.search(r"[0-9]{4}@", correo)
+    if not año_match:
+        return "no contiene 4 dígitos antes del @"
+    
+    # Verificar el dominio
+    if not re.search(r"@techsolutions\.cl$", correo):
+        return "dominio incorrecto, debe ser @techsolutions.cl"
+    
+    # Si el formato básico es correcto, verificar el rango del año
+    año = extraer_año(correo)
+    if año and not validar_año_rango(año):
+        return f"año {año} fuera del rango permitido (2010-2025)"
+    
+    # Si llega aquí, hay algún otro problema con el formato
+    return "no cumple con el formato requerido"
 
 
 def validar_lineas(lineas, regex, patron):
     """Valida todas las líneas y retorna lista de resultados."""
     resultados = []
     for i, correo in enumerate(lineas, 1):
-        if not correo or correo.isspace():
-            resultados.append((i, correo, "Inválido", "línea vacía/espacios"))
+        # Eliminar espacios en blanco al inicio y final
+        correo = correo.strip()
+        
+        if not correo:
+            resultados.append((i, correo, "Inválido", "línea vacía"))
             continue
+        
+        # Validar formato básico con regex
         m = regex.fullmatch(correo)
         if m:
-            resultados.append((i, correo, "Válido", ""))
+            # Si el formato básico es correcto, verificar el rango del año
+            año = extraer_año(correo)
+            if validar_año_rango(año):
+                resultados.append((i, correo, "Válido", ""))
+            else:
+                resultados.append((i, correo, "Inválido", f"año {año} fuera del rango (2010-2025)"))
         else:
             motivo = analizar_motivo(correo, patron)
             resultados.append((i, correo, "Inválido", motivo))
+    
     return resultados
+
+
+def generar_estadisticas(resultados):
+    """Genera estadísticas de validación."""
+    total = len(resultados)
+    validos = sum(1 for r in resultados if r[2] == "Válido")
+    invalidos = total - validos
+    
+    # Agrupar motivos de invalidez
+    motivos = {}
+    for r in resultados:
+        if r[2] == "Inválido":
+            motivo = r[3]
+            motivos[motivo] = motivos.get(motivo, 0) + 1
+    
+    # Calcular precisión si hay casos de prueba con resultados esperados
+    precision = (validos / total * 100) if total > 0 else 0
+    
+    return {
+        "total": total,
+        "validos": validos,
+        "invalidos": invalidos,
+        "precision": precision,
+        "motivos": motivos
+    }

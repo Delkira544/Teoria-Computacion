@@ -20,3 +20,15 @@ def exportar_resultados(ruta, resultados):
         return None
     except Exception as e:
         return str(e)
+
+
+def read_file(filepath):
+    """Read content from a file."""
+    with open(filepath, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def save_file(filepath, content):
+    """Save content to a file."""
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(content)
