@@ -365,34 +365,32 @@ class RegexTester(ttk.LabelFrame):
         self.case_sensitive_callback = case_sensitive_callback
     
     def test_regex(self):
-        """Test the regex against the sample input."""
+        """Testea la regex contra el input de muestra."""
         if not self.regex_callback or not self.case_sensitive_callback:
             messagebox.showerror("Error", "Callbacks no configurados")
             return
-        
+
         sample = self.sample_var.get().strip()
         if not sample:
             self.result_var.set("Ingrese un correo de prueba")
             return
-        
-        # Get regex and case sensitivity
+
+        # Obtener regex y sensibilidad
         regex = self.regex_callback()
         case_sensitive = self.case_sensitive_callback()
-        
-        # Test regex
-        from ..scripts.reg import probar_regex, analizar_motivo, extraer_año, validar_año_rango
-        
-        # Check if regex compiles
-        from ..scripts.reg import compilar_regex
+
+        # Importar funciones de validación
+        from src.scripts.reg import probar_regex, analizar_motivo, extraer_año, validar_año_rango, compilar_regex
+
+        # Compilar regex
         compiled_regex, _ = compilar_regex(regex, case_sensitive)
         if not compiled_regex:
             self.result_var.set("Error en la expresión regular")
             self.result_label.configure(style="Danger.TLabel")
             return
-        
-        # Check if it matches basic pattern
+
+        # Validar patrón básico
         if probar_regex(regex, case_sensitive, sample):
-            # Check year range
             año = extraer_año(sample)
             if validar_año_rango(año):
                 self.result_var.set("✅ Válido")
@@ -400,7 +398,6 @@ class RegexTester(ttk.LabelFrame):
             else:
                 self.result_var.set(f"❌ Inválido: año {año} fuera del rango (2010-2025)")
                 self.result_label.configure(style="Danger.TLabel")
-            self.result_label.configure(style="Danger.TLabel")
         else:
             motivo = analizar_motivo(sample)
             self.result_var.set(f"❌ Inválido: {motivo}")
