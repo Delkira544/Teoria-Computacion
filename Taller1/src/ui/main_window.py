@@ -39,6 +39,7 @@ class MainApp(tk.Tk):
         self.default_pattern = r"^[a-zA-Z]+[._-][a-zA-Z]+[0-9]{4}@techsolutions\.cl$"
         self.patron_var = tk.StringVar(value=self.default_pattern)
         self.case_sensitive_var = tk.BooleanVar(value=True)
+
         
         # Variables para el archivo
         self.current_file = None

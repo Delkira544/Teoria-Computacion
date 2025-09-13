@@ -4,7 +4,7 @@ SRC = os.path.join(os.path.dirname(__file__), "src")
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
 
-from ui.main_window import MainApp  # <-- NO uses main_windowold
+from ui.main_window import MainApp  
 
 def main():
     app = MainApp()

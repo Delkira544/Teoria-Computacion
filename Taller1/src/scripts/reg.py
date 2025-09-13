@@ -1,7 +1,10 @@
 import re
 
 def compilar_regex(patron: str, case_sensitive: bool):
-    """Compila la expresión regular con el flag adecuado."""
+    """
+    Compila la expresión regular con el flag adecuado.
+    Permite validar correos según configuración.
+    """
     try:
         flags = 0 if case_sensitive else re.IGNORECASE
         return re.compile(patron, flags), flags
@@ -11,7 +14,10 @@ def compilar_regex(patron: str, case_sensitive: bool):
 
 
 def probar_regex(patron: str, case_sensitive: bool, cadena: str):
-    """Prueba si la cadena coincide con la expresión regular."""
+    """
+    Prueba si la cadena coincide con la expresión regular.
+    Útil para testear el patrón antes de validar todo.
+    """
     regex, _ = compilar_regex(patron, case_sensitive)
     if regex:
         return bool(regex.fullmatch(cadena))
@@ -19,7 +25,9 @@ def probar_regex(patron: str, case_sensitive: bool, cadena: str):
 
 
 def extraer_año(correo: str):
-    """Extrae el año de un correo con formato válido."""
+    """
+    Extrae el año de la parte local del correo.
+    """
     match = re.search(r'[0-9]{4}@', correo)
     if match:
         return match.group(0)[:-1]  # Elimina el @ al final
@@ -27,7 +35,9 @@ def extraer_año(correo: str):
 
 
 def validar_año_rango(año: str):
-    """Valida que el año esté en el rango 2010-2025."""
+    """
+    Valida que el año esté en el rango permitido.
+    """
     try:
         año_num = int(año)
         return 2010 <= año_num <= 2025
@@ -36,7 +46,21 @@ def validar_año_rango(año: str):
 
 
 def analizar_motivo(correo: str):
-    """Devuelve el motivo de invalidez según reglas del taller."""
+    """
+    Analiza el motivo por el cual un correo es inválido.
+    Realiza verificaciones secuenciales sobre el formato:
+    - Vacío o espacios
+    - Formato nombre[sep]apellido
+    - Año de ingreso (4 dígitos antes del @)
+    - Dominio correcto
+    - Año en rango permitido
+    Devuelve un string explicativo para mostrar al usuario.
+    Si cambian las reglas, adaptar aquí los chequeos.
+    """
+    """
+    Devuelve el motivo de invalidez según reglas del taller.
+    Explica por qué un correo no es válido.
+    """
     # Verificar si la línea está vacía
     if not correo.strip():
         return "línea vacía"
@@ -74,6 +98,15 @@ def analizar_motivo(correo: str):
 
 
 def validar_lineas(lineas, regex, case_sensitive: bool):
+    """
+    Valida cada línea de correo usando la expresión regular y reglas adicionales.
+    Para cada línea:
+    - Elimina espacios
+    - Usa regex para formato general
+    - Verifica año en rango
+    - Si no es válido, llama a analizar_motivo para diagnóstico
+    Devuelve lista de tuplas: (número de línea, correo, estado, motivo)
+    """
     """Valida todas las líneas y retorna lista de resultados."""
     resultados = []
     for i, correo in enumerate(lineas, 1):
@@ -101,6 +134,11 @@ def validar_lineas(lineas, regex, case_sensitive: bool):
 
 
 def generar_estadisticas(resultados):
+    """
+    Genera estadísticas a partir de los resultados de validación.
+    Calcula total, válidos, inválidos y agrupa motivos de error.
+    Útil para mostrar resumen en la interfaz.
+    """
     """Genera estadísticas de validación."""
     total = len(resultados)
     validos = sum(1 for r in resultados if r[2] == "Válido")

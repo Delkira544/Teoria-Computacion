@@ -2,7 +2,10 @@ import os
 
 
 def cargar_archivo_txt(ruta):
-    """Carga un archivo .txt y retorna las líneas útiles."""
+    """
+    Carga un archivo .txt y retorna las líneas útiles.
+    Útil para leer correos desde archivo externo.
+    """
     try:
         with open(ruta, encoding="utf-8") as f:
             lineas = [line.strip() for line in f.readlines()]
@@ -14,7 +17,10 @@ def cargar_archivo_txt(ruta):
 
 
 def exportar_resultados(ruta, resultados):
-    """Exporta los resultados a un archivo CSV/TXT."""
+    """
+    Exporta los resultados a un archivo CSV/TXT.
+    Permite guardar el reporte de validación.
+    """
     try:
         with open(ruta, "w", encoding="utf-8") as f:
             f.write("linea,correo,estado,motivo\n")
@@ -26,17 +32,24 @@ def exportar_resultados(ruta, resultados):
 
 
 def read_file(filepath):
-    """Lee el contenido de un archivo."""
+    """
+    Lee el contenido completo de un archivo.
+    """
     with open(filepath, 'r', encoding='utf-8') as f:
         return f.read()
 
 
 def save_file(filepath, content):
-    """Guarda contenido en un archivo."""
+    """
+    Guarda texto en un archivo.
+    """
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(content)
 
 
 def file_exists(filepath):
+    """
+    Verifica si un archivo existe en disco.
+    """
     """Verifica si un archivo existe."""
     return os.path.exists(filepath)
