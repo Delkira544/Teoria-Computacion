@@ -1,375 +1,351 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog
-from src.ui.components import ResultsTable
-from src.utils.file_handler import cargar_archivo_txt, exportar_resultados
-from src.scripts.reg import compilar_regex, probar_regex, validar_lineas
+from tkinter import ttk, filedialog, messagebox
+import os
+import sys
+import csv
+
+# Habilitar ejecución como script (añade ../ al sys.path)
+if __name__ == "__main__" and __package__ is None:
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    # Ejecución como paquete: python -m ui.main_window
+    from .components import ScrollableFrame, ResultTable, StatsFrame, RegexTester, apply_color_theme
+    from ..scripts.reg import compilar_regex, validar_lineas, generar_estadisticas
+    from ..utils.file_handler import read_file, save_file, file_exists
+except Exception:
+    # Ejecución directa: python ui/main_window.py (requiere que 'src' esté en sys.path)
+    from ui.components import ScrollableFrame, ResultTable, StatsFrame, RegexTester, apply_color_theme
+    from scripts.reg import compilar_regex, validar_lineas, generar_estadisticas
+    from utils.file_handler import read_file, save_file, file_exists
+
 
 class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Validador de Correos - Taller")
-        self.geometry("700x400")
-        self.lineas = []
-        self.regex_str = r"^[a-zA-Z]+[._-][a-zA-Z]+[0-9]{4}@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-        self.case_sensitive = True
-        self.regex = None
-        self.resultados = []
-        self.show_open_file()
-
-    def clear(self):
-        for widget in self.winfo_children():
-            widget.destroy()
-
-    def show_open_file(self):
-        self.clear()
-        tk.Label(self, text="Selecciona un archivo .txt con correos (uno por línea):").pack(pady=10)
-        self.file_label = tk.Label(self, text="", fg="blue")
-        self.file_label.pack(pady=5)
-        tk.Button(self, text="Abrir .txt", command=self.cargar_archivo).pack()
-        self.btn_next = tk.Button(self, text="Siguiente", state="disabled", command=self.show_regex_config)
-        self.btn_next.pack(side="right", padx=10, pady=10)
-        tk.Button(self, text="Salir", command=self.quit).pack(side="right", padx=10, pady=10)
-
-    def cargar_archivo(self):
-        ruta = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
-        if not ruta:
-            return
-        lineas, error = cargar_archivo_txt(ruta)
-        if error:
-            messagebox.showerror("Error", error)
-            return
-        self.file_label.config(text=ruta)
-        self.lineas = lineas
-        self.btn_next.config(state="normal")
-
-    def show_regex_config(self):
-        self.clear()
-        tk.Label(self, text="Expresión regular para validar correos:").pack(pady=5)
-        self.regex_var = tk.StringVar(value=self.regex_str)
-        tk.Entry(self, textvariable=self.regex_var, width=60).pack(pady=5)
-        self.case_var = tk.BooleanVar(value=self.case_sensitive)
-        tk.Checkbutton(self, text="Sensible a mayúsculas/minúsculas", variable=self.case_var).pack()
-        tk.Button(self, text="Probar regex", command=self.probar_regex).pack(pady=5)
-        tk.Label(self, text="Ejemplo válido: daniel.soto2025@dominio.com").pack()
-        tk.Label(self, text="Ejemplo inválido: daniel..soto2025@dominio.com").pack()
-        tk.Button(self, text="Atrás", command=self.show_open_file).pack(side="left", padx=10, pady=10)
-        tk.Button(self, text="Siguiente", command=self.compilar_regex).pack(side="right", padx=10, pady=10)
-        tk.Button(self, text="Salir", command=self.quit).pack(side="right", padx=10, pady=10)
-
-    def probar_regex(self):
-        cadena = simpledialog.askstring("Probar regex", "Ingresa una cadena para probar:")
-        if cadena is None:
-            return
-        patron = self.regex_var.get()
-        case_sensitive = self.case_var.get()
-        try:
-            resultado = probar_regex(patron, case_sensitive, cadena)
-            if resultado:
-                messagebox.showinfo("Prueba", "¡Coincide!")
-            else:
-                messagebox.showinfo("Prueba", "No coincide.")
-        except Exception as e:
-            messagebox.showerror("Regex inválida", str(e))
-
-    def compilar_regex(self):
-        patron = self.regex_var.get()
-        case_sensitive = self.case_var.get()
-        try:
-            self.regex, self.flags = compilar_regex(patron, case_sensitive)
-            self.regex_str = patron
-            self.case_sensitive = case_sensitive
-            self.show_results()
-        except Exception as e:
-            messagebox.showerror("Regex inválida", str(e))
-
-    def show_results(self):
-        self.clear()
-        tk.Button(self, text="Validar", command=self.validar).pack(pady=5)
-        self.filtro = tk.StringVar(value="Todos")
-        filtro_frame = tk.Frame(self)
-        filtro_frame.pack()
-        for estado in ["Todos", "Válidos", "Inválidos"]:
-            tk.Radiobutton(filtro_frame, text=estado, variable=self.filtro, value=estado, command=self.aplicar_filtro).pack(side="left")
-        self.tree = ResultsTable(self)
-        self.tree.pack(expand=True, fill="both")
-        self.tree.bind("<Double-1>", self.mostrar_detalle)
-        btn_frame = tk.Frame(self)
-        btn_frame.pack(fill="x", pady=5)
-        tk.Button(btn_frame, text="Exportar", command=self.exportar_resultados).pack(side="right", padx=10)
-        tk.Button(btn_frame, text="Atrás", command=self.show_regex_config).pack(side="left", padx=10)
-        tk.Button(btn_frame, text="Salir", command=self.quit).pack(side="left", padx=10)
-        self.status = tk.Label(self, text="Total: 0 | Válidos: 0 | Inválidos: 0 | Tiempo: 0s", anchor="w")
-        self.status.pack(fill="x")
-        self.resultados = []
-
-    def validar(self):
-        import time
-        start = time.time()
-        resultados_raw = validar_lineas(self.lineas, self.regex, self.regex_str)
-        self.resultados = resultados_raw
-        self.aplicar_filtro()
-        total = len(self.resultados)
-        validos = sum(1 for r in self.resultados if r[2] == "Válido")
-        invalidos = total - validos
-        elapsed = round(time.time() - start, 2)
-        self.status.config(text=f"Total: {total} | Válidos: {validos} | Inválidos: {invalidos} | Tiempo: {elapsed}s")
-
-    def aplicar_filtro(self):
-        self.tree.delete(*self.tree.get_children())
-        estado = self.filtro.get()
-        for r in self.resultados:
-            if estado == "Todos":
-                self.tree.insert("", "end", values=r)
-            elif estado == "Válidos" and r[2] == "Válido":
-                self.tree.insert("", "end", values=r)
-            elif estado == "Inválidos" and r[2] == "Inválido":
-                self.tree.insert("", "end", values=r)
-
-    def exportar_resultados(self):
-        ruta = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV", "*.csv"), ("Text", "*.txt")])
-        if not ruta:
-            return
-        error = exportar_resultados(ruta, self.resultados)
-        if error:
-            messagebox.showerror("Error", f"No se pudo exportar: {error}")
-        else:
-            messagebox.showinfo("Exportar", "Reporte exportado correctamente.")
-
-    def mostrar_detalle(self, event):
-        item = self.tree.focus()
-        if not item:
-            return
-        vals = self.tree.item(item, "values")
-        detalle = f"Línea: {vals[0]}\nCorreo: {vals[1]}\nEstado: {vals[2]}\nMotivo: {vals[3]}"
-        dlg = tk.Toplevel(self)
-        dlg.title("Detalle")
-        tk.Label(dlg, text=detalle, justify="left").pack(padx=10, pady=10)
-        tk.Button(dlg, text="Copiar", command=lambda: self.copiar_detalle(detalle)).pack(pady=5)
-        tk.Button(dlg, text="Cerrar", command=dlg.destroy).pack(pady=5)
-
-    def copiar_detalle(self, texto):
-        self.clipboard_clear()
-        self.clipboard_append(texto)
-        messagebox.showinfo("Copiado", "Detalle copiado al portapapeles.")
-    def cerrar(self):
-        self.master.quit()
-        self.master.destroy()
-
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, simpledialog
-from src.ui.components import LabeledEntry, LabeledCheck, LabeledButton, ResultsTable
-from src.utils.file_handler import cargar_archivo_txt, exportar_resultados
-from src.scripts.reg import compilar_regex, probar_regex, validar_lineas, analizar_motivo
-
-# --- Datos resultado ---
-class Resultado:
-    def __init__(self, linea, correo, estado, motivo):
-        self.linea = linea
-        self.correo = correo
-        self.estado = estado
-        self.motivo = motivo
         
-
-
-# --- Ventana 1: Abrir archivo ---
-class WinAbrir(tk.Toplevel):
-    def __init__(self, master, on_next):
-        super().__init__(master)
-        self.title("Abrir archivo")
-        self.geometry("400x200")
-        self.on_next = on_next
-        self.file_path = tk.StringVar()
-        self.lineas = []
-        self.create_widgets()
-
-    def create_widgets(self):
-        tk.Label(self, text="Selecciona un archivo .txt con correos (uno por línea):").pack(pady=10)
-        tk.Button(self, text="Abrir .txt", command=self.cargar_archivo).pack()
-        tk.Label(self, textvariable=self.file_path, fg="blue").pack(pady=5)
-        self.btn_next = tk.Button(self, text="Siguiente", state="disabled", command=self.siguiente)
-        self.btn_next.pack(side="right", padx=10, pady=10)
-        tk.Button(self, text="Cancelar", command=self.cancelar).pack(side="right", padx=10, pady=10)
-
-    def cargar_archivo(self):
-        ruta = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
-        if not ruta:
-            return
+        # Aplicar tema de colores
         try:
-            with open(ruta, encoding="utf-8") as f:
-                lineas = [line.strip() for line in f.readlines()]
-            if not any(lineas):
-                messagebox.showwarning("Archivo vacío", "El archivo no contiene líneas útiles.")
-                return
-            self.file_path.set(ruta)
-            self.lineas = lineas
-            self.btn_next.config(state="normal")
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo abrir el archivo: {e}")
-
-    def siguiente(self):
-        self.on_next(self.lineas)
-        self.destroy()
-
-    def cancelar(self):
-        self.master.destroy()
-
-# --- Ventana 2: Configurar Regex ---
-class WinRegex(tk.Toplevel):
-    def __init__(self, master, lineas, on_next, on_back):
-        super().__init__(master)
-        self.title("Configurar Regex")
-        self.geometry("500x300")
-        self.lineas = lineas
-        self.on_next = on_next
-        self.on_back = on_back
-        self.regex_str = tk.StringVar(value=r"^[a-zA-Z]+[._-][a-zA-Z]+[0-9]{4}@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-        self.case_sensitive = tk.BooleanVar(value=True)
-        self.create_widgets()
-
-    def create_widgets(self):
-        tk.Label(self, text="Expresión regular para validar correos:").pack(pady=5)
-        tk.Entry(self, textvariable=self.regex_str, width=60).pack(pady=5)
-        tk.Checkbutton(self, text="Sensible a mayúsculas/minúsculas", variable=self.case_sensitive).pack()
-        tk.Button(self, text="Probar regex", command=self.probar_regex).pack(pady=5)
-        tk.Label(self, text="Ejemplo válido: daniel.soto2025@dominio.com").pack()
-        tk.Label(self, text="Ejemplo inválido: daniel..soto2025@dominio.com").pack()
-        frame = tk.Frame(self)
-        frame.pack(side="bottom", fill="x", pady=10)
-        tk.Button(frame, text="Atrás", command=self.atras).pack(side="left", padx=10)
-        tk.Button(frame, text="Siguiente", command=self.siguiente).pack(side="right", padx=10)
-        tk.Button(frame, text="Cancelar", command=self.cerrar).pack(side="right", padx=10)
-
-    def cerrar(self):
-        self.master.quit()
-        self.master.destroy()
-
-    def probar_regex(self):
-        import re
-        cadena = simpledialog.askstring("Probar regex", "Ingresa una cadena para probar:")
-        if cadena is None:
-            return
-        try:
-            flags = 0 if self.case_sensitive.get() else re.IGNORECASE
-            patron = self.regex_str.get()
-            regex = re.compile(patron, flags)
-            if regex.fullmatch(cadena):
-                messagebox.showinfo("Prueba", "¡Coincide!")
-            else:
-                messagebox.showinfo("Prueba", "No coincide.")
-        except Exception as e:
-            messagebox.showerror("Regex inválida", str(e))
-
-    def siguiente(self):
-        import re
-        try:
-            flags = 0 if self.case_sensitive.get() else re.IGNORECASE
-            patron = self.regex_str.get()
-            regex = re.compile(patron, flags)
-            self.on_next(self.lineas, regex, patron, flags)
-            self.destroy()
-        except Exception as e:
-            messagebox.showerror("Regex inválida", str(e))
-
-    def atras(self):
-        geom = self.geometry()
-        self.on_back(geom)
-        self.destroy()
-
-    def cancelar(self):
-        self.master.destroy()
-
-# --- Ventana 3: Resultados ---
-class WinResultados(tk.Toplevel):
-    def __init__(self, master, lineas, regex, patron, flags, on_back):
-        super().__init__(master)
-        self.title("Resultados")
-        self.geometry("700x400")
-        self.lineas = lineas
-        self.regex = regex
-        self.patron = patron
-        self.flags = flags
-        self.on_back = on_back
+            apply_color_theme(self)
+        except Exception:
+            pass
+        
+        self.title("Validador de Correos Electrónicos")
+        self.geometry("1000x750")
+        self.minsize(800, 600)
+        self.configure(padx=10, pady=10)
+        
+        # Expresión regular predeterminada
+        self.default_pattern = r"^[a-zA-Z]+[._-][a-zA-Z]+[0-9]{4}@techsolutions\.cl$"
+        self.patron_var = tk.StringVar(value=self.default_pattern)
+        self.case_sensitive_var = tk.BooleanVar(value=True)
+        
+        # Variables para el archivo
+        self.current_file = None
+        self.file_content = []
+        
+        # Variables para resultados
         self.resultados = []
-        self.filtro = tk.StringVar(value="Todos")
-        self.validado = False
-        self.create_widgets()
-
-    def create_widgets(self):
-        tk.Button(self, text="Validar", command=self.validar).pack(pady=5)
-        filtro_frame = tk.Frame(self)
-        filtro_frame.pack()
-        for estado in ["Todos", "Válidos", "Inválidos"]:
-            tk.Radiobutton(filtro_frame, text=estado, variable=self.filtro, value=estado, command=self.aplicar_filtro).pack(side="left")
-        self.tree = ResultsTable(self)
-        self.tree.pack(expand=True, fill="both")
-        self.tree.bind("<Double-1>", self.mostrar_detalle)
-        btn_frame = tk.Frame(self)
-        btn_frame.pack(fill="x", pady=5)
-        tk.Button(btn_frame, text="Exportar", command=self.exportar_resultados).pack(side="right", padx=10)
-        tk.Button(btn_frame, text="Atrás", command=self.atras).pack(side="left", padx=10)
-        tk.Button(btn_frame, text="Cerrar", command=self.cerrar).pack(side="left", padx=10)
-        self.status = tk.Label(self, text="Total: 0 | Válidos: 0 | Inválidos: 0 | Tiempo: 0s", anchor="w")
-        self.status.pack(fill="x")
-
-    def validar(self):
-        import time
-        from src.scripts.reg import compilar_regex, validar_lineas
-        start = time.time()
-        # Recompilar regex con el flag actual
-        case_sensitive = self.flags == 0
-        regex, _ = compilar_regex(self.patron, case_sensitive)
-        resultados_raw = validar_lineas(self.lineas, regex, self.patron)
-        self.resultados = [Resultado(*r) for r in resultados_raw]
-        self.validado = True
-        self.aplicar_filtro()
-        total = len(self.resultados)
-        validos = sum(1 for r in self.resultados if r.estado == "Válido")
-        invalidos = total - validos
-        elapsed = round(time.time() - start, 2)
-        self.status.config(text=f"Total: {total} | Válidos: {validos} | Inválidos: {invalidos} | Tiempo: {elapsed}s")
-
-    # validación y motivo ahora están en reg.py
-
-    def aplicar_filtro(self):
-        self.tree.delete(*self.tree.get_children())
-        estado = self.filtro.get()
-        for r in self.resultados:
-            if estado == "Todos":
-                self.tree.insert("", "end", values=(r.linea, r.correo, r.estado, r.motivo))
-            elif estado == "Válidos" and r.estado == "Válido":
-                self.tree.insert("", "end", values=(r.linea, r.correo, r.estado, r.motivo))
-            elif estado == "Inválidos" and r.estado == "Inválido":
-                self.tree.insert("", "end", values=(r.linea, r.correo, r.estado, r.motivo))
-
-    def exportar_resultados(self):
-        ruta = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV", "*.csv"), ("Text", "*.txt")])
-        if not ruta:
+        
+        # Crear pestañas
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill=tk.BOTH, expand=True)
+        
+        # Pestaña de configuración
+        self.config_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.config_frame, text="Configuración")
+        
+        # Pestaña de resultados
+        self.results_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.results_frame, text="Resultados")
+        
+        # Inicializar interfaz
+        self.create_config_widgets()
+        self.create_results_widgets()
+    
+    def create_config_widgets(self):
+        # Frame principal
+        main_frame = ttk.Frame(self.config_frame)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Frame para cargar archivo
+        file_frame = ttk.LabelFrame(main_frame, text="Archivo de correos")
+        file_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Crear controles para cargar archivo
+        file_controls = ttk.Frame(file_frame)
+        file_controls.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.file_path_var = tk.StringVar()
+        file_entry = ttk.Entry(file_controls, textvariable=self.file_path_var, width=50)
+        file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        browse_button = ttk.Button(file_controls, text="Examinar...", command=self.browse_file)
+        browse_button.pack(side=tk.LEFT)
+        
+        # Mostrar contenido del archivo
+        file_content_frame = ttk.Frame(file_frame)
+        file_content_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        ttk.Label(file_content_frame, text="Contenido del archivo:").pack(anchor="w")
+        
+        self.file_content_text = tk.Text(file_content_frame, height=10, wrap=tk.WORD)
+        self.file_content_text.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        file_scrollbar = ttk.Scrollbar(self.file_content_text, command=self.file_content_text.yview)
+        file_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.file_content_text.config(yscrollcommand=file_scrollbar.set)
+        
+        # Frame para configurar regex
+        regex_frame = ttk.LabelFrame(main_frame, text="Expresión Regular")
+        regex_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Crear controles para regex
+        regex_controls = ttk.Frame(regex_frame)
+        regex_controls.pack(fill=tk.X, padx=5, pady=5)
+        
+        ttk.Label(regex_controls, text="Patrón:").pack(side=tk.LEFT, padx=(0, 5))
+        
+        regex_entry = ttk.Entry(regex_controls, textvariable=self.patron_var, width=50)
+        regex_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        reset_button = ttk.Button(regex_controls, text="Restaurar", 
+                                  command=lambda: self.patron_var.set(self.default_pattern))
+        reset_button.pack(side=tk.LEFT, padx=(0, 5))
+        
+        case_check = ttk.Checkbutton(regex_controls, text="Sensible a mayúsculas/minúsculas", 
+                                     variable=self.case_sensitive_var)
+        case_check.pack(side=tk.LEFT)
+        
+        # Frame para probar regex
+        self.regex_tester = RegexTester(regex_frame)
+        self.regex_tester.pack(fill=tk.X, padx=5, pady=5)
+        self.regex_tester.set_callbacks(
+            lambda: self.patron_var.get(),
+            lambda: self.case_sensitive_var.get()
+        )
+        
+        # Botones de acción
+        action_frame = ttk.Frame(main_frame)
+        action_frame.pack(fill=tk.X, padx=5, pady=10)
+        
+        validate_button = ttk.Button(action_frame, text="Validar correos", command=self.validate_emails)
+        validate_button.pack(side=tk.RIGHT)
+    
+    def create_results_widgets(self):
+        # Frame principal
+        main_frame = ttk.Frame(self.results_frame)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Frame superior para controles
+        control_frame = ttk.Frame(main_frame)
+        control_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Información del archivo y regex
+        info_frame = ttk.LabelFrame(control_frame, text="Información")
+        info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        self.file_info_var = tk.StringVar(value="Archivo: No seleccionado")
+        ttk.Label(info_frame, textvariable=self.file_info_var).pack(anchor="w", padx=5, pady=2)
+        
+        self.regex_info_var = tk.StringVar(value=f"Regex: {self.default_pattern}")
+        ttk.Label(info_frame, textvariable=self.regex_info_var).pack(anchor="w", padx=5, pady=2)
+        
+        self.case_info_var = tk.StringVar(value="Sensibilidad: Case sensitive")
+        ttk.Label(info_frame, textvariable=self.case_info_var).pack(anchor="w", padx=5, pady=2)
+        
+        # Botones de acción
+        action_frame = ttk.Frame(control_frame)
+        action_frame.pack(side=tk.RIGHT)
+        
+        export_menu = tk.Menu(self, tearoff=0)
+        export_menu.add_command(label="Exportar a TXT", command=lambda: self.export_results("txt"))
+        export_menu.add_command(label="Exportar a CSV", command=lambda: self.export_results("csv"))
+        
+        export_button = ttk.Button(action_frame, text="Exportar")
+        export_button.pack(side=tk.LEFT, padx=5)
+        export_button.bind("<Button-1>", lambda e: export_menu.post(
+            export_button.winfo_rootx(), 
+            export_button.winfo_rooty() + export_button.winfo_height()
+        ))
+        
+        config_button = ttk.Button(action_frame, text="Volver a configuración", 
+                                  command=lambda: self.notebook.select(0))
+        config_button.pack(side=tk.LEFT, padx=5)
+        
+        # Frame para resultados
+        results_container = ttk.Frame(main_frame)
+        results_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Tabla de resultados
+        table_frame = ttk.LabelFrame(results_container, text="Resultados")
+        table_frame.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=(0, 5))
+        
+        self.result_table = ResultTable(table_frame)
+        self.result_table.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Estadísticas
+        stats_frame = ttk.Frame(results_container)
+        stats_frame.pack(fill=tk.Y, side=tk.RIGHT, padx=(0, 5), pady=5)
+        
+        self.stats_display = StatsFrame(stats_frame)
+        self.stats_display.pack(fill=tk.BOTH, expand=True)
+    
+    def browse_file(self):
+        filepath = filedialog.askopenfilename(
+            title="Seleccionar archivo de correos",
+            filetypes=[("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")]
+        )
+        if filepath:
+            try:
+                # Verificar que el archivo existe y es legible
+                if not os.path.exists(filepath):
+                    messagebox.showerror("Error", f"El archivo no existe: {filepath}")
+                    return
+                
+                if not os.path.isfile(filepath):
+                    messagebox.showerror("Error", f"No es un archivo válido: {filepath}")
+                    return
+                
+                # Leer contenido
+                content = read_file(filepath)
+                if not content.strip():
+                    messagebox.showwarning("Advertencia", "El archivo está vacío")
+                
+                # Actualizar UI
+                self.current_file = filepath
+                self.file_path_var.set(filepath)
+                self.file_content_text.delete(1.0, tk.END)
+                self.file_content_text.insert(tk.END, content)
+                self.file_info_var.set(f"Archivo: {os.path.basename(filepath)}")
+                
+                # Guardar contenido para procesamiento
+                self.file_content = content.strip().split('\n')
+                
+                messagebox.showinfo("Éxito", f"Archivo cargado correctamente: {filepath}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al cargar el archivo: {str(e)}")
+    
+    def validate_emails(self):
+        # Verificar que hay contenido para validar
+        if not self.file_content:
+            messagebox.showwarning("Advertencia", "No hay correos para validar. Cargue un archivo primero.")
             return
-        resultados_raw = [(r.linea, r.correo, r.estado, r.motivo) for r in self.resultados]
-        error = exportar_resultados(ruta, resultados_raw)
-        if error:
-            messagebox.showerror("Error", f"No se pudo exportar: {error}")
-        else:
-            messagebox.showinfo("Exportar", "Reporte exportado correctamente.")
-
-    def mostrar_detalle(self, event):
-        item = self.tree.focus()
-        if not item:
+        
+        # Verificar que la regex es válida
+        patron = self.patron_var.get().strip()
+        if not patron:
+            messagebox.showerror("Error", "La expresión regular no puede estar vacía")
             return
-        vals = self.tree.item(item, "values")
-        detalle = f"Línea: {vals[0]}\nCorreo: {vals[1]}\nEstado: {vals[2]}\nMotivo: {vals[3]}"
-        dlg = tk.Toplevel(self)
-        dlg.title("Detalle")
-        tk.Label(dlg, text=detalle, justify="left").pack(padx=10, pady=10)
-        tk.Button(dlg, text="Copiar", command=lambda: self.copiar_detalle(detalle)).pack(pady=5)
-        tk.Button(dlg, text="Cerrar", command=dlg.destroy).pack(pady=5)
-
-    def copiar_detalle(self, texto):
-        self.clipboard_clear()
-        self.clipboard_append(texto)
-        messagebox.showinfo("Copiado", "Detalle copiado al portapapeles.")
-
-    def atras(self):
-        geom = self.geometry()
-        self.on_back(geom)
-        self.destroy()
+        
+        case_sensitive = self.case_sensitive_var.get()
+        
+        # Compilar regex
+        regex, _ = compilar_regex(patron, case_sensitive)
+        if not regex:
+            messagebox.showerror("Error", "La expresión regular no es válida")
+            return
+        
+        # Validar correos
+        resultados = validar_lineas(self.file_content, regex, case_sensitive)
+        self.resultados = resultados
+        
+        # Generar estadísticas
+        stats = generar_estadisticas(resultados)
+        
+        # Actualizar información en la pestaña de resultados
+        self.regex_info_var.set(f"Regex: {patron}")
+        self.case_info_var.set(f"Sensibilidad: {'Case sensitive' if case_sensitive else 'Case insensitive'}")
+        
+        # Actualizar tabla de resultados
+        self.result_table.clear()
+        for result in resultados:
+            self.result_table.add_row(result)
+        
+        # Actualizar estadísticas
+        self.stats_display.update_stats(stats)
+        
+        # Cambiar a la pestaña de resultados
+        self.notebook.select(1)
+        
+        messagebox.showinfo("Validación completada", 
+                           f"Se validaron {stats['total']} correos.\n"
+                           f"Válidos: {stats['validos']} ({stats['precision']:.2f}%)\n"
+                           f"Inválidos: {stats['invalidos']}")
+    
+    def export_results(self, format_type):
+        """Exporta los resultados a un archivo."""
+        if not self.resultados:
+            messagebox.showinfo("Sin datos", "No hay resultados para exportar.")
+            return
+        
+        # Definir tipo de archivo y extensión
+        if format_type == "txt":
+            file_types = [("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")]
+            default_ext = ".txt"
+        else:  # csv
+            file_types = [("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")]
+            default_ext = ".csv"
+        
+        # Solicitar ubicación para guardar
+        filepath = filedialog.asksaveasfilename(
+            title=f"Guardar resultados como {format_type.upper()}",
+            defaultextension=default_ext,
+            filetypes=file_types
+        )
+        
+        if not filepath:
+            return  # Usuario canceló
+        
+        # Verificar si el archivo ya existe
+        if file_exists(filepath):
+            if not messagebox.askyesno("Confirmar sobrescritura", 
+                                    f"El archivo {os.path.basename(filepath)} ya existe. ¿Desea sobrescribirlo?"):
+                return
+        
+        try:
+            # Obtener estadísticas
+            stats = self.stats_display.get_stats()
+            
+            # Exportar según formato
+            if format_type == "txt":
+                self._export_txt(filepath, stats)
+            else:  # csv
+                self._export_csv(filepath)
+                
+            messagebox.showinfo("Éxito", f"Resultados guardados en: {filepath}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al guardar resultados: {str(e)}")
+    
+    def _export_txt(self, filepath, stats):
+        """Exporta resultados a formato TXT."""
+        # Formatear resultados
+        output = "# Resultados de validación\n"
+        output += f"{'#':<5} {'Correo':<40} {'Estado':<10} {'Motivo':<40}\n"
+        output += "-" * 95 + "\n"
+        
+        for row in self.resultados:
+            output += f"{row[0]:<5} {row[1]:<40} {row[2]:<10} {row[3]:<40}\n"
+        
+        # Añadir estadísticas
+        output += "\n# Estadísticas\n"
+        output += f"Total: {stats['total']}\n"
+        output += f"Válidos: {stats['validos']} ({stats['precision']:.2f}%)\n"
+        output += f"Inválidos: {stats['invalidos']}\n\n"
+        
+        output += "# Motivos de invalidez\n"
+        for motivo, cantidad in sorted(stats['motivos'].items(), key=lambda x: x[1], reverse=True):
+            output += f"- {motivo}: {cantidad}\n"
+        
+        # Guardar en archivo
+        save_file(filepath, output)
+    
+    def _export_csv(self, filepath):
+        """Exporta resultados a formato CSV."""
+        with open(filepath, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            # Escribir encabezados
+            writer.writerow(["#", "Correo", "Estado", "Motivo"])
+            # Escribir datos
+            for row in self.resultados:
+                writer.writerow(row)

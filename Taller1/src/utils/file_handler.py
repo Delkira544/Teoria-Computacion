@@ -1,3 +1,6 @@
+import os
+
+
 def cargar_archivo_txt(ruta):
     """Carga un archivo .txt y retorna las líneas útiles."""
     try:
@@ -23,12 +26,17 @@ def exportar_resultados(ruta, resultados):
 
 
 def read_file(filepath):
-    """Read content from a file."""
+    """Lee el contenido de un archivo."""
     with open(filepath, 'r', encoding='utf-8') as f:
         return f.read()
 
 
 def save_file(filepath, content):
-    """Save content to a file."""
+    """Guarda contenido en un archivo."""
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(content)
+
+
+def file_exists(filepath):
+    """Verifica si un archivo existe."""
+    return os.path.exists(filepath)

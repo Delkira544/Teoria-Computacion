@@ -35,16 +35,30 @@ def validar_año_rango(año: str):
         return False
 
 
-def analizar_motivo(correo: str, patron: str):
+def analizar_motivo(correo: str):
     """Devuelve el motivo de invalidez según reglas del taller."""
+    # Verificar si la línea está vacía
+    if not correo.strip():
+        return "línea vacía"
+        
     # Verificar formato básico de nombre[separador]apellido
     if not re.match(r"^[a-zA-Z]+[._-][a-zA-Z]+", correo):
-        return "formato de nombre[separador]apellido incorrecto"
+        if not re.match(r"^[a-zA-Z]+", correo):
+            return "falta nombre"
+        elif not re.search(r"[._-]", correo):
+            return "falta separador (._-)"
+        else:
+            return "falta apellido"
     
     # Verificar que tenga 4 dígitos antes del @
     año_match = re.search(r"[0-9]{4}@", correo)
     if not año_match:
-        return "no contiene 4 dígitos antes del @"
+        if not re.search(r"@", correo):
+            return "falta arroba (@)"
+        elif re.search(r"[0-9]+@", correo):
+            return "año debe tener exactamente 4 dígitos"
+        else:
+            return "falta año (4 dígitos)"
     
     # Verificar el dominio
     if not re.search(r"@techsolutions\.cl$", correo):
@@ -59,7 +73,7 @@ def analizar_motivo(correo: str, patron: str):
     return "no cumple con el formato requerido"
 
 
-def validar_lineas(lineas, regex, patron):
+def validar_lineas(lineas, regex, case_sensitive: bool):
     """Valida todas las líneas y retorna lista de resultados."""
     resultados = []
     for i, correo in enumerate(lineas, 1):
@@ -80,7 +94,7 @@ def validar_lineas(lineas, regex, patron):
             else:
                 resultados.append((i, correo, "Inválido", f"año {año} fuera del rango (2010-2025)"))
         else:
-            motivo = analizar_motivo(correo, patron)
+            motivo = analizar_motivo(correo)
             resultados.append((i, correo, "Inválido", motivo))
     
     return resultados
